@@ -1,0 +1,351 @@
+---
+title: "Untitled12"
+author: "Shanshan Wang"
+date: "2023-11-17"
+output: pdf_document
+---
+
+
+```{R}
+setwd("/Users/uriuri/Downloads")
+data_ana = read.csv('analysisData.csv')
+
+scoringData = read.csv('scoringData.csv')
+
+```
+
+
+```{r}
+library(dplyr)
+
+scoringData$price <- 0
+data <- rbind(data_ana, scoringData, fill = TRUE)
+data <- data[-50001, ]
+data <-data%>%
+select(-c("id","make_name","model_name","trim_name","power","torque","transmission","wheel_system","length_inches","width_inches","description","exterior_color","interior_color","major_options","franchise_make","listed_date","listing_color","front_legroom_inches","back_legroom_inches","highway_fuel_economy","fuel_tank_volume_gallons","fleet","frame_damaged"))
+
+#,"fleet","frame_damaged"
+```
+
+#1.1 Data Cleaning --Numerical Variables
+```{r}
+
+
+#substitute NAs with median for city_fuel_economy, engine_displacement and horsepower
+data <- data %>%
+      group_by(body_type) %>%
+      mutate(city_fuel_economy  = 
+      ifelse(is.na(city_fuel_economy ),median(city_fuel_economy , na.rm = TRUE),city_fuel_economy )) %>%
+      ungroup()
+
+
+
+data <- data %>%
+      group_by(body_type) %>%
+      mutate(engine_displacement  = 
+      ifelse(is.na(engine_displacement ),median(engine_displacement , na.rm = TRUE),engine_displacement )) %>%
+      ungroup()
+
+
+
+data <- data %>%
+      group_by(body_type) %>%
+      mutate(horsepower  = 
+      ifelse(is.na(horsepower ),median(horsepower , na.rm = TRUE),horsepower )) %>%
+      ungroup()
+
+
+data$is_new <- as.logical(data$is_new)
+data <- data %>%
+      mutate(mileage = ifelse(is.na(mileage) & is_new, 0, mileage))
+
+data <- data %>%
+      mutate(mileage = ifelse(is.na(mileage), (2024 - year) * 14263, mileage))
+
+
+data<-data%>%
+  group_by(wheel_system_display)%>%
+  mutate(seller_rating = ifelse(is.na(seller_rating),median(seller_rating, na.rm= TRUE),seller_rating ))%>%
+  ungroup()
+
+data<-data%>%
+  group_by(is_new)%>%
+  mutate(owner_count = ifelse(is.na(owner_count)&is_new=="TRUE",0,owner_count))%>%
+  ungroup
+
+data<-data%>%
+  group_by(year)%>%
+  mutate(owner_count = ifelse(is.na(owner_count),median(owner_count, na.rm= TRUE),owner_count ))%>%
+  ungroup()
+
+
+```
+
+#1.2 Data Cleaning-- Categorical Variables
+```{r}
+library(caret)
+data$is_cpo[data$is_cpo==""] <- FALSE
+
+#data$frame_damaged[data$frame_damaged == ""] <- "Undisclosed"
+#data$has_accidents[data$has_accidents == ""] <- "Undisclosed"
+
+#data$salvage[data$salvage == ""] <- "Undisclosed"
+
+#data$fleet[data$fleet == ""] <- "Undisclosed"
+
+
+
+
+colSums(is.na(data))
+```
+#1.3 Misstep of Using random forest and Logistic Regression to predict NAs
+```{r}
+#set.seed(551)
+#data_accident <- data[data$has_accidents != "", ]
+#data_accident$has_accidents <- ifelse(data_accident$has_accidents == "True", 1, 0)  
+#split1 = sample(1:nrow(data_accident),0.8*nrow(data_accident))
+
+#train1 = data_accident[split1,]
+#test1 = data_accident[-split1,]
+  
+#random forest predicting on has_accidents
+#train$has_accidents <- as.factor(train$has_accidents)
+
+
+
+#library(glmnet)
+#x = X <- as.matrix(train1[, -which(names(train1) == "has_accidents")])
+#y = train1$has_accidents
+#set.seed(617)
+
+
+#model1 <- glm(has_accidents ~transmission_display+year+frame_damaged+franchise_dealer+isCab+mileage+owner_count+salvage+seller_rating+price+is_cpo, data = train1,family='binomial')
+#summary(model1)
+
+# #logistic regression to predict undisclosed on has_accident
+# train_data <- data[data$has_accidents %in% c("True", "False"), ]
+# predict_data <- data[data$has_accidents == "Undisclosed", ]
+# 
+# # Convert has_accidents to a binary variable for training
+# train_data$has_accidents <- ifelse(train_data$has_accidents == "True", 1, 0)
+# 
+# # Train a logistic regression model (choose your predictor variables)
+# model_accidents <- glm(has_accidents ~ year +owner_count+ horsepower+mileage+seller_rating, data = train_data, family = "binomial")
+# 
+# # Predict and impute
+# predict_data$has_accidents <- predict(model_accidents, newdata = predict_data, type = "response")
+# predict_data$has_accidents <- ifelse(predict_data$has_accidents > 0.5, "True", "False")
+# 
+# # Combine the data back
+# imputed_data <- rbind(train_data, predict_data)
+# 
+# 
+# 
+# 
+# #logistic regression to predict undisclosed on frame_Damaged
+# train_data <- data[data$frame_damaged %in% c("True", "False"), ]
+# predict_data <- data[data$frame_damaged == "Undisclosed", ]
+# 
+# # Convert frame_damaged to a binary variable for training
+# train_data$frame_damaged <- ifelse(train_data$frame_damaged == "True", 1, 0)
+# 
+# # Train a logistic regression model (choose your predictor variables)
+# model_frame <- glm(frame_damaged ~ year +owner_count+ horsepower+mileage+seller_rating, data = train_data, family = "binomial")
+# 
+# # Predict and impute
+# predict_data$frame_damaged <- predict(model_frame, newdata = predict_data, type = "response")
+# predict_data$frame_damaged <- ifelse(predict_data$frame_damaged > 0.5, "True", "False")
+# 
+# # Combine the data back
+# imputed_data <- rbind(train_data, predict_data)
+# 
+# 
+# imputed_data$frame_damaged[imputed_data$frame_damaged=="0"]<- "False"
+# imputed_data$frame_damaged[imputed_data$frame_damaged=="1"]<- "True"
+# 
+# 
+# 
+# #logistic regression to predict undisclosed on salvage
+# train_data <- data[data$salvage %in% c("True", "False"), ]
+# predict_data1 <- data[data$salvage == "Undisclosed", ]
+# 
+# # Convert salvage to a binary variable for training
+# train_data$salvage <- ifelse(train_data$salvage == "True", 1, 0)
+# 
+# # Train a logistic regression model (choose your predictor variables)
+# model_salvage <- glm(salvage ~ mileage+seller_rating + daysonmarket+ year, data = train_data, family = "binomial")
+# 
+# predict_data$salvage <- predict(model_salvage, newdata = predict_data, type = "response")
+# predict_data$salvage <- ifelse(predict_data$salvage > 0.5, "True", "False")
+# 
+# 
+# #logistic regression to predict undisclosed on fleet
+# train_data <- data[data$fleet %in% c("True", "False"), ]
+# predict_data1 <- data[data$fleet == "Undisclosed", ]
+# 
+# # Convert salvage to a binary variable for training
+# train_data$fleet <- ifelse(train_data$fleet == "True", 1, 0)
+# 
+# # Train a logistic regression model (choose your predictor variables)
+# model_fleet <- glm(fleet ~ body_type+ mileage+seller_rating + year, data = train_data, family = "binomial")
+# 
+# predict_data$fleet <- predict(model_fleet, newdata = predict_data, type = "response")
+# predict_data$fleet <- ifelse(predict_data$fleet > 0.5, "True", "False")
+# 
+# 
+# # Combine the data back
+# imputed_data <- rbind(train_data, predict_data)
+# 
+# imputed_data$fleet[imputed_data$fleet=="0"]<- "False"
+# imputed_data$fleet[imputed_data$fleet=="1"]<- "True"
+# 
+# 
+# 
+# 
+# 
+# 
+# variables <- c("fleet", "frame_damaged", "has_accidents", "salvage")  # list all factor variables
+# for (var in variables) {
+#     predict_data[[var]] <- factor(predict_data[[var]], levels = levels(train_data[[var]]))
+# }
+
+
+
+
+
+
+#library(leaps)
+#subsets = regsubsets(price~.,data=analysisDataProcessed, nvmax=25,really.big = T)
+#summary(subsets)
+#coef(subsets,which.min(summary(subsets)$cp))
+
+```
+
+
+
+#2.1 Unbind Analysis Data and Scoring Data
+
+```{r}
+
+analysisDataProcessed <- data[1:nrow(data_ana), ]
+scoringDataProcessed <- data[(nrow(data_ana) + 1):nrow(data), ]
+
+```
+
+#2.2 Split the training and Testing data
+
+```{r}
+set.seed(551)
+split = sample(1:nrow(analysisDataProcessed),0.8*nrow(analysisDataProcessed))
+train = analysisDataProcessed[split,]
+test = analysisDataProcessed[-split,]
+
+
+```
+
+#3. Feature selection using hybrid Stepwise method.
+```{r}
+# start_mod = lm(price~1,data=train)
+# empty_mod = lm(price~1,data=train)
+# full_mod = lm(price~.,data=train)
+# hybridStepwise = step(start_mod,
+#                       scope=list(upper=full_mod,lower=empty_mod),
+#                       direction='both')
+# summary(hybridStepwise)
+
+```
+
+# Model Selection
+```{R}
+#linear model:
+model1<- lm(price~horsepower + mileage + engine_type + is_new + 
+    wheel_system_display + body_type + engine_displacement + 
+    year + seller_rating + height_inches + 
+    isCab + franchise_dealer + owner_count + daysonmarket + maximum_seating + 
+    city_fuel_economy + is_cpo + wheelbase_inches,data=train)
+
+pred_model1 = predict(model1,newdata=test)
+rmse_model1 = sqrt(mean((pred_model1 - test$price)^2))
+rmse_model1
+
+
+
+#regression Tree:
+library(rpart); library(rpart.plot)
+model2 = rpart(price~horsepower + mileage + engine_type + is_new + 
+    wheel_system_display + body_type + engine_displacement + 
+    year  + seller_rating + height_inches + 
+    isCab + franchise_dealer + owner_count + daysonmarket + maximum_seating + 
+    city_fuel_economy + is_cpo + wheelbase_inches,data = train, method = 'anova')
+summary(model2)
+rpart.plot(model2)
+
+pred_model2 = predict(model2,newdata = test)
+rmse_model2 = sqrt(mean((pred_model2 - test$price)^2)); 
+rmse_model2
+
+
+#generalized additive model:
+library(mgcv)
+model3 = gam(price~horsepower + s(mileage) + engine_type + is_new + 
+    wheel_system_display + body_type + engine_displacement + 
+    year  + s(seller_rating) + height_inches + 
+    isCab + franchise_dealer + owner_count + daysonmarket + maximum_seating + 
+    s(city_fuel_economy) + is_cpo + wheelbase_inches,
+              method = 'REML', 
+              data = train)
+pred = predict(model3,newdata = test)
+rmse3 = sqrt(mean((pred-test$price)^2)); rmse3
+# Random forest ranger:
+library(ranger)
+set.seed(617)
+
+model4 = ranger(price~horsepower + mileage + engine_type + is_new + 
+    wheel_system_display + body_type + engine_displacement + 
+    year + transmission_display + seller_rating + height_inches + 
+    isCab + franchise_dealer + owner_count + daysonmarket + maximum_seating + 
+    city_fuel_economy + is_cpo + wheelbase_inches,
+                          data=train,
+                          num.trees = 400, 
+                          mtry=10, 
+                          min.node.size = 100, 
+                          splitrule = 'variance')
+pred = predict(model4, data = test, num.trees = 400)
+rmse_cv_forest_ranger = sqrt(mean((pred$predictions - test$price)^2)); rmse_cv_forest_ranger
+
+
+
+# Predicting
+colSums(is.na(analysisDataProcessed))
+
+predictions <- predict(model1, newdata = scoringDataProcessed)
+
+
+# Creating submission file
+submission <- data.frame(id = scoringData$id, price = abs(predictions))
+write.csv(submission, "sample_submission.csv", row.names = FALSE)
+
+```
+
+```{r}
+library(xgboost)
+# Convert data to DMatrix object
+train_matrix <- xgb.DMatrix(data.matrix(train[, -which(names(train) == "price")]), label = train$price)
+test_matrix <- xgb.DMatrix(data.matrix(test[, -which(names(test) == "price")]), label = test$price)
+
+set.seed(123)
+xgb_model <- xgboost(data=train_matrix, nrounds=100, objective="reg:squarederror")
+
+# Predict on the test set
+xgb_predictions <- predict(xgb_model, test_matrix)
+rmse_xgb = sqrt(mean((xgb_predictions - test$price)^2)); rmse_xgb
+
+```
+
+
+
+
+
+
+
+
